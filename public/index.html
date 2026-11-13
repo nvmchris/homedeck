@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>homedeck</title>
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main class="page">
+    <header class="top">
+      <div>
+        <p class="greeting" id="greeting"></p>
+        <h1 id="title">homedeck</h1>
+      </div>
+      <div class="clock">
+        <div class="time" id="time">--:--</div>
+        <div class="date" id="date"></div>
+      </div>
+    </header>
+
+    <section class="row">
+      <article class="card" id="system">
+        <h2>System</h2>
+        <div class="gauges" id="gauges"></div>
+        <dl class="facts" id="facts"></dl>
+      </article>
+
+      <article class="card" id="weather">
+        <h2>Weather <span class="sub" id="weather-name"></span></h2>
+        <div id="weather-body" class="muted">Loading…</div>
+      </article>
+
+      <article class="card" id="calendar">
+        <h2>Upcoming</h2>
+        <ul class="events" id="events"><li class="muted">Loading…</li></ul>
+      </article>
+    </section>
+
+    <section id="services"></section>
+
+    <section class="card" id="docker">
+      <div class="card-head">
+        <h2>Containers <span class="sub" id="docker-count"></span></h2>
+        <input id="docker-filter" type="search" placeholder="Filter…" aria-label="Filter containers">
+      </div>
+      <div class="containers" id="containers"><p class="muted">Loading…</p></div>
+    </section>
+  </main>
+  <script src="app.js"></script>
+</body>
+</html>
