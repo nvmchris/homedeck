@@ -1,0 +1,14 @@
+services:
+  homedeck:
+    build: .
+    container_name: homedeck
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./config:/app/config
+      # Read-only Docker socket for the containers widget
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      # Optional: host root (read-only) so disk usage shows the host, not the container.
+      # Then use { "name": "Root", "path": "/host" } under system.disks.
+      - /:/host:ro

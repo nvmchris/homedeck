@@ -1,0 +1,36 @@
+{
+  "title": "Homelab",
+  "greeting": true,
+
+  "services": [
+    {
+      "group": "Media",
+      "items": [
+        { "name": "Jellyfin", "url": "http://192.168.1.10:8096", "icon": "🎬", "description": "Movies & shows" },
+        { "name": "Immich", "url": "http://192.168.1.10:2283", "icon": "📷", "description": "Photos" }
+      ]
+    },
+    {
+      "group": "Infrastructure",
+      "items": [
+        { "name": "Proxmox", "url": "https://192.168.1.2:8006", "icon": "🖥️", "description": "Hypervisor" },
+        { "name": "Pi-hole", "url": "http://192.168.1.3/admin", "icon": "🛡️", "description": "DNS & ad blocking" },
+        { "name": "Router", "url": "http://192.168.1.1", "icon": "📡", "ping": false }
+      ]
+    }
+  ],
+
+  "docker": { "socket": "/var/run/docker.sock" },
+
+  "system": {
+    "disks": [{ "name": "Root", "path": "/" }]
+  },
+
+  "weather": { "name": "Vienna", "latitude": 48.21, "longitude": 16.37, "unit": "celsius" },
+
+  "calendars": [
+    { "name": "Holidays", "url": "https://calendar.google.com/calendar/ical/en.austrian%23holiday%40group.v.calendar.google.com/public/basic.ics", "color": "#f59e0b" }
+  ],
+  "calendarDays": 30,
+  "calendarLimit": 10
+}
