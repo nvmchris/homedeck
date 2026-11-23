@@ -2,6 +2,8 @@
 // Zero dependencies: only Node.js built-in modules.
 const http = require("node:http");
 const https = require("node:https");
+const crypto = require("node:crypto");
+const net = require("node:net");
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
@@ -35,14 +37,23 @@ async function cached(key, ttlMs, fn) {
   return value;
 }
 
-// GET a URL and return { status, body }. Accepts self-signed certs (common in homelabs).
-function request(url, { timeoutMs = 8000, socketPath, readBody = true } = {}) {
+// Certificates are verified unless the caller opts out (per service: "insecureTls": true).
+const warnedInsecure = new Set();
+function warnInsecure(url) {
+  if (warnedInsecure.has(url)) return;
+  warnedInsecure.add(url);
+  console.warn(`WARNING: TLS verification disabled for ${url} (insecureTls). Prefer a trusted certificate.`);
+}
+
+// GET a URL and return { status, body }.
+function request(url, { timeoutMs = 8000, socketPath, readBody = true, insecureTls = false } = {}) {
   return new Promise((resolve, reject) => {
     const target = socketPath ? new URL(url, "http://localhost") : new URL(url);
     const lib = target.protocol === "https:" ? https : http;
+    if (insecureTls && target.protocol === "https:") warnInsecure(target.origin);
     const req = lib.request(
       target,
-      { method: "GET", socketPath, rejectUnauthorized: false, timeout: timeoutMs, headers: { "User-Agent": "homedeck" } },
+      { method: "GET", socketPath, rejectUnauthorized: !insecureTls, timeout: timeoutMs, headers: { "User-Agent": "homedeck" } },
       (res) => {
         if (!readBody) {
           res.resume();
@@ -132,9 +143,13 @@ async function system(config) {
 
 // ---------- docker ----------
 
+// DOCKER_URL (env) or docker.url (config) point at a docker-socket-proxy over HTTP;
+// otherwise the Unix socket is used.
 async function docker(config) {
-  const socketPath = config.docker?.socket || "/var/run/docker.sock";
-  const res = await request("/containers/json?all=true", { socketPath });
+  const base = process.env.DOCKER_URL || config.docker?.url;
+  const res = base
+    ? await request(new URL("/containers/json?all=true", base).href)
+    : await request("/containers/json?all=true", { socketPath: config.docker?.socket || "/var/run/docker.sock" });
   if (res.status !== 200) throw new Error(`Docker API returned ${res.status}`);
   return JSON.parse(res.body)
     .map((c) => ({
@@ -148,10 +163,10 @@ async function docker(config) {
 
 // ---------- service status ----------
 
-async function ping(url) {
+async function ping(url, insecureTls) {
   const start = Date.now();
   try {
-    const res = await request(url, { timeoutMs: 5000, readBody: false });
+    const res = await request(url, { timeoutMs: 5000, readBody: false, insecureTls });
     // Any HTTP answer (even 401/403) means the service is up.
     return { up: res.status < 500, ms: Date.now() - start };
   } catch {
@@ -167,7 +182,7 @@ async function services(config) {
       items: await Promise.all(
         (group.items || []).map(async (item) => ({
           ...item,
-          status: item.ping === false || !item.url ? null : await cached(`ping:${item.url}`, 30_000, () => ping(item.url)),
+          status: item.ping === false || !item.url ? null : await cached(`ping:${item.url}`, 30_000, () => ping(item.url, item.insecureTls === true)),
         }))
       ),
     }))
@@ -266,10 +281,11 @@ async function calendar(config) {
   from.setHours(0, 0, 0, 0);
   const to = new Date(from.getTime() + days * 86_400_000);
   const results = await Promise.all(
-    feeds.map(({ name, url, color }) =>
+    feeds.map(({ name, url, color, insecureTls }) =>
       cached(`ics:${url}`, 15 * 60_000, async () => {
-        let res = await request(url);
-        if (res.status >= 300 && res.status < 400 && res.location) res = await request(new URL(res.location, url).href);
+        const opts = { insecureTls: insecureTls === true };
+        let res = await request(url, opts);
+        if (res.status >= 300 && res.status < 400 && res.location) res = await request(new URL(res.location, url).href, opts);
         if (res.status !== 200) throw new Error(`HTTP ${res.status}`);
         return parseIcs(res.body);
       })
@@ -305,9 +321,58 @@ function send(res, status, body, type = "application/json") {
   res.end(body);
 }
 
-http
-  .createServer(async (req, res) => {
-    const { pathname } = new URL(req.url, "http://localhost");
+// ---------- access control ----------
+
+// Host allow-list (blocks DNS rebinding). IP literals are always allowed: a rebinding
+// attack needs a hostname. Extend with ALLOWED_HOSTS (comma-separated hostnames).
+const DEFAULT_HOSTS = ["localhost", "alpha.tail2970c8.ts.net", "homepi.tail2970c8.ts.net", "nvmchris.duckdns.org"];
+function allowedHosts() {
+  const extra = (process.env.ALLOWED_HOSTS || "").split(",").map((h) => h.trim().toLowerCase()).filter(Boolean);
+  return new Set([...DEFAULT_HOSTS, ...extra]);
+}
+
+function hostAllowed(hostHeader) {
+  if (!hostHeader) return false;
+  const m = /^(\[[0-9a-f:.]+\]|[^:]+)(?::\d+)?$/i.exec(hostHeader.trim());
+  if (!m) return false;
+  const host = m[1].toLowerCase();
+  return host.startsWith("[") || net.isIPv4(host) || allowedHosts().has(host);
+}
+
+const COOKIE = "homedeck_token";
+const sha = (v) => crypto.createHash("sha256").update(String(v)).digest();
+const tokenMatches = (given, token) => !!given && crypto.timingSafeEqual(sha(given), sha(token));
+
+function requestToken(req, query) {
+  const bearer = /^Bearer (.+)$/i.exec(req.headers.authorization || "");
+  if (bearer) return bearer[1];
+  if (req.headers["x-homedeck-token"]) return req.headers["x-homedeck-token"];
+  const cookie = (req.headers.cookie || "").split(";").map((c) => c.trim()).find((c) => c.startsWith(`${COOKIE}=`));
+  return cookie ? decodeURIComponent(cookie.slice(COOKIE.length + 1)) : query;
+}
+
+// ---------- http server ----------
+
+function handle(req, res) {
+  return (async () => {
+    if (!hostAllowed(req.headers.host)) return send(res, 403, "Forbidden host", "text/plain");
+    let url;
+    try {
+      url = new URL(req.url, "http://localhost");
+    } catch {
+      return send(res, 400, "Bad request", "text/plain");
+    }
+    const { pathname } = url;
+    const token = process.env.HOMEDECK_TOKEN;
+    if (token) {
+      const queryToken = url.searchParams.get("token");
+      if (!tokenMatches(requestToken(req, queryToken), token)) return send(res, 401, "Unauthorized", "text/plain");
+      if (queryToken) {
+        // Browser login: /?token=... sets a cookie, then drops the token from the URL.
+        res.writeHead(302, { Location: pathname, "Set-Cookie": `${COOKIE}=${encodeURIComponent(queryToken)}; HttpOnly; SameSite=Strict; Path=/` });
+        return res.end();
+      }
+    }
     const handler = api[pathname];
     if (handler) {
       try {
@@ -322,5 +387,16 @@ http
       return send(res, 404, "Not found", "text/plain");
     }
     send(res, 200, fs.readFileSync(file), types[path.extname(file)] || "application/octet-stream");
-  })
-  .listen(PORT, () => console.log(`homedeck running on http://localhost:${PORT}`));
+  })().catch((err) => {
+    console.error(err);
+    if (!res.headersSent) send(res, 500, "Internal error", "text/plain");
+  });
+}
+
+const server = http.createServer(handle);
+module.exports = { server };
+
+if (require.main === module) {
+  if (!process.env.HOMEDECK_TOKEN) console.warn("WARNING: HOMEDECK_TOKEN is not set; the dashboard is unauthenticated.");
+  server.listen(PORT, () => console.log(`homedeck running on http://localhost:${PORT}`));
+}

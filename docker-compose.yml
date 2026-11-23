@@ -4,11 +4,26 @@ services:
     container_name: homedeck
     restart: unless-stopped
     ports:
+      # Documented default (all interfaces). Recommended: "127.0.0.1:3000:3000" behind a reverse proxy.
       - "3000:3000"
+    environment:
+      # Containers widget talks to the proxy below, never to the raw Docker socket.
+      DOCKER_URL: http://docker-proxy:2375
+      # HOMEDECK_TOKEN: change-me        # optional auth (header, cookie or /?token=)
+      # ALLOWED_HOSTS: deck.example.com  # extra Host names, comma-separated
     volumes:
       - ./config:/app/config
-      # Read-only Docker socket for the containers widget
+      # Only used for disk usage: statfs on this file reports the host root filesystem.
+      # Use { "name": "Root", "path": "/host" } under system.disks.
+      - /etc/hostname:/host:ro
+    depends_on:
+      - docker-proxy
+
+  docker-proxy:
+    image: tecnativa/docker-socket-proxy:0.3.0
+    container_name: homedeck-docker-proxy
+    restart: unless-stopped
+    environment:
+      CONTAINERS: 1 # read-only container list; everything else (POST, exec, ...) stays denied
+    volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
-      # Optional: host root (read-only) so disk usage shows the host, not the container.
-      # Then use { "name": "Root", "path": "/host" } under system.disks.
-      - /:/host:ro
