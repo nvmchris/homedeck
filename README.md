@@ -33,13 +33,14 @@ Environment variables:
 | Variable | Meaning |
 | --- | --- |
 | `PORT` | Listen port (default `3000`) |
+| `HOST` | Listen address, e.g. `127.0.0.1` for loopback only (default: all interfaces) |
 | `CONFIG` | Config path (default `./config/config.json`) |
 | `HOMEDECK_TOKEN` | Optional access token. If set, requests need `Authorization: Bearer <token>`, `X-Homedeck-Token`, or the `homedeck_token` cookie; open `/?token=<token>` once in a browser to set the cookie. If unset, a warning is logged and the dashboard is open. |
 | `ALLOWED_HOSTS` | Extra `Host` names, comma-separated. Defaults: `localhost`, `alpha.tail2970c8.ts.net`, `homepi.tail2970c8.ts.net`, `nvmchris.duckdns.org`; IP literals are always accepted. Other hosts get 403. |
 | `DOCKER_URL` | Docker API over HTTP (e.g. a docker-socket-proxy); overrides `docker.socket` |
 
-The server listens on all interfaces. Prefer binding the published port to loopback
-(`127.0.0.1:3000:3000`) behind a reverse proxy, and set `HOMEDECK_TOKEN` if it is reachable by others.
+By default the server listens on all interfaces. Prefer loopback (`HOST=127.0.0.1`, or a published
+port of `127.0.0.1:3000:3000` in Docker) behind a reverse proxy, and set `HOMEDECK_TOKEN` if it is reachable by others.
 
 ## Configuration
 

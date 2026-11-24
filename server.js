@@ -9,6 +9,7 @@ const os = require("node:os");
 const path = require("node:path");
 
 const PORT = Number(process.env.PORT) || 3000;
+const HOST = process.env.HOST || undefined; // unset: all interfaces
 const CONFIG_PATH = process.env.CONFIG || path.join(__dirname, "config", "config.json");
 const EXAMPLE_PATH = path.join(__dirname, "config.example.json");
 const PUBLIC_DIR = path.join(__dirname, "public");
@@ -398,5 +399,5 @@ module.exports = { server };
 
 if (require.main === module) {
   if (!process.env.HOMEDECK_TOKEN) console.warn("WARNING: HOMEDECK_TOKEN is not set; the dashboard is unauthenticated.");
-  server.listen(PORT, () => console.log(`homedeck running on http://localhost:${PORT}`));
+  server.listen(PORT, HOST, () => console.log(`homedeck running on http://${HOST || "localhost"}:${PORT}`));
 }
