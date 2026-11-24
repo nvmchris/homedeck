@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Fixed
+- Opening homedeck from project-hub or after a browser restart no longer shows
+  Unauthorized: the token cookie is now `SameSite=Lax` and kept for a year.
+
 ### Security
 - `GET //` no longer crashes the server; malformed request URLs get 400.
 - TLS certificates are verified for outbound requests; self-signed targets must opt in with `insecureTls: true` (warning logged).

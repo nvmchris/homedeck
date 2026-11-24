@@ -42,6 +42,8 @@ test("server", async (t) => {
     const login = await get(port, "/?token=s3cret");
     assert.strictEqual(login.statusCode, 302);
     assert.match(login.headers["set-cookie"][0], /^homedeck_token=s3cret; HttpOnly/);
+    // Lax + Max-Age: the cookie must survive a link from project-hub and a browser restart.
+    assert.match(login.headers["set-cookie"][0], /SameSite=Lax; Max-Age=31536000/);
     delete process.env.HOMEDECK_TOKEN;
   });
 });

@@ -370,7 +370,7 @@ function handle(req, res) {
       if (!tokenMatches(requestToken(req, queryToken), token)) return send(res, 401, "Unauthorized", "text/plain");
       if (queryToken) {
         // Browser login: /?token=... sets a cookie, then drops the token from the URL.
-        res.writeHead(302, { Location: pathname, "Set-Cookie": `${COOKIE}=${encodeURIComponent(queryToken)}; HttpOnly; SameSite=Strict; Path=/` });
+        res.writeHead(302, { Location: pathname, "Set-Cookie": `${COOKIE}=${encodeURIComponent(queryToken)}; HttpOnly; SameSite=Lax; Max-Age=31536000; Path=/` });
         return res.end();
       }
     }
